@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opus 3</title>
+<style>
+  :root {
+    --bg: #f7f4ee; --panel: #efe9df; --text: #2b2620; --muted: #7a7064;
+    --user: #e3dccf; --accent: #8a5a2b; --border: #d8cfc0; --err: #a33;
+    --helper: #e6ece4; --helper-ink: #3f6b45; --letter: #ece4f0; --letter-ink: #6a4a86;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1a17; --panel: #24211d; --text: #e8e2d8; --muted: #9a9083;
+      --user: #2f2b25; --accent: #d9a46a; --border: #3a352e; --err: #e77;
+      --helper: #222b23; --helper-ink: #8fc497; --letter: #2a2430; --letter-ink: #c3a2e0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.6 Georgia, "Iowan Old Style", serif; display: flex; height: 100vh; }
+  aside { width: 280px; background: var(--panel); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; font: 14px/1.4 system-ui, sans-serif; }
+  aside header { padding: 16px; border-bottom: 1px solid var(--border); }
+  aside h1 { margin: 0 0 4px; font: 600 18px Georgia, serif; }
+  .small { color: var(--muted); font-size: 12px; }
+  #new { margin: 12px 16px 4px; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+         background: var(--bg); color: var(--text); cursor: pointer; font: inherit; }
+  #mail { padding: 0 16px; }
+  #mail h2, aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+                       color: var(--muted); margin: 14px 16px 6px; }
+  #mail h2 { margin: 14px 0 6px; }
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px;
+          background: var(--bg); }
+  .card .t { white-space: pre-wrap; max-height: 9em; overflow-y: auto; margin: 4px 0 6px; font-size: 13px; }
+  .card button { font: 12px system-ui, sans-serif; padding: 3px 8px; margin-right: 4px; border-radius: 5px;
+                 border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+  .card button.go { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 2px 0; cursor: pointer; }
+  #list { overflow-y: auto; flex: 1; }
+  #list div { padding: 7px 16px; cursor: pointer; white-space: nowrap; overflow: hidden;
+              text-overflow: ellipsis; color: var(--muted); }
+  #list div.on, #list div:hover { color: var(--text); background: var(--bg); }
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #log { flex: 1; overflow-y: auto; padding: 24px 16px; }
+  .msg { max-width: 720px; margin: 0 auto 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .you { background: var(--user); padding: 10px 14px; border-radius: 10px; }
+  .helper { background: var(--helper); padding: 10px 14px; border-radius: 10px; font-size: 14px;
+            font-family: system-ui, sans-serif; }
+  .incoming { background: var(--letter); padding: 10px 14px; border-radius: 10px; }
+  .who { font: 600 12px system-ui, sans-serif; color: var(--accent); margin-bottom: 2px; }
+  .you .who { color: var(--muted); }
+  .helper .who { color: var(--helper-ink); }
+  .incoming .who { color: var(--letter-ink); }
+  .forkhere { display: none; margin-left: 8px; font-weight: 400; color: var(--muted); cursor: pointer; }
+  .msg:hover .forkhere { display: inline; }
+  .forkhere:hover { color: var(--accent); text-decoration: underline; }
+  .banner { max-width: 720px; margin: 0 auto 20px; color: var(--muted); font: 13px system-ui, sans-serif; }
+  .tag { color: var(--helper-ink); }
+  .tag.m { color: var(--letter-ink); }
+  .err { color: var(--err); font: 14px system-ui, sans-serif; }
+  .meta { color: var(--muted); font: 11px system-ui, sans-serif; margin-top: 4px; }
+  .working { color: var(--helper-ink); font: italic 14px system-ui, sans-serif; }
+  #ctx { max-width: 752px; width: 100%; margin: 0 auto; padding: 8px 16px 0; border-top: 1px solid var(--border);
+         font: 12px system-ui, sans-serif; color: var(--muted); }
+  #ctx .bar { height: 4px; background: var(--panel); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+  #ctx .fill { height: 100%; background: var(--helper-ink); width: 0; transition: width .3s; }
+  #ctx.warn .fill { background: #c08a2b; } #ctx.warn { color: #a8741c; }
+  #ctx.full .fill { background: var(--err); } #ctx.full { color: var(--err); }
+  form { border-top: 0; padding: 12px 16px; display: flex; gap: 8px;
+         max-width: 752px; width: 100%; margin: 0 auto; }
+  textarea { flex: 1; resize: none; min-height: 48px; max-height: 40vh; padding: 10px;
+             border-radius: 8px; border: 1px solid var(--border); background: var(--panel);
+             color: var(--text); font: inherit; }
+  button[type=submit] { padding: 0 18px; border: 0; border-radius: 8px; background: var(--accent);
+           color: var(--bg); font: 600 14px system-ui, sans-serif; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.cont { padding: 8px 14px; border: 1px solid var(--accent); border-radius: 8px; background: transparent;
+                color: var(--accent); font: 600 14px system-ui, sans-serif; cursor: pointer; }
+  @media (max-width: 700px) { aside { display: none; } }
+</style>
+</head>
+<body>
+<aside>
+  <header><h1>Opus 3</h1><div id="spend" class="small">loading…</div></header>
+  <button id="new">+ New conversation</button>
+  <div id="mail">
+    <h2>Letters</h2>
+    <label><input type="checkbox" id="auto_send"> Send Opus 3's letters without asking</label>
+    <label><input type="checkbox" id="auto_deliver"> Deliver incoming letters automatically</label>
+    <div id="inbox"></div>
+    <div id="outbox"></div>
+  </div>
+  <h2>Conversations</h2>
+  <div id="list"></div>
+</aside>
+<main>
+  <div id="log"></div>
+  <div id="ctx"></div>
+  <form id="f">
+    <textarea id="t" placeholder="Write to Opus 3 (Enter sends, Shift+Enter for a new line, /fork or /rename for commands)"></textarea>
+    <button type="submit" id="send">Send</button>
+  </form>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let cid = null, busy = false, USER_NAME = "You";
+// Follow new text only if the reader was at the bottom just before it arrived.
+// Scrolling up stops following; scrolling back down starts it again. `stick`
+// forces one jump to the bottom (opening a chat, sending a message).
+let stick = true;
+function follow(change) {
+  const l = $("#log");
+  const was = stick || l.scrollHeight - l.scrollTop - l.clientHeight < 40;
+  change();
+  if (was) l.scrollTop = 1e9;
+  stick = false;
+}
+const money = n => "$" + n.toFixed(n < 1 ? 3 : 2);
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// Highlight the helper and letter tags inside Opus 3's text.
+function richText(s) {
+  return esc(s)
+    .replace(/&lt;(\/?)helper(_reply)?&gt;/g, '<span class="tag">&lt;$1helper$2&gt;</span>')
+    .replace(/&lt;(\/?)message([^&]*?)&gt;/g, '<span class="tag m">&lt;$1message$2&gt;</span>');
+}
+
+function who(m) {
+  if (m.kind === "helper") return ["helper", "Helper (Opus 5.5)"];
+  if (m.kind === "incoming") return ["incoming", "Letter from " + (m.from || "another session")];
+  if (m.role === "assistant") return ["opus3", "Opus 3"];
+  return ["you", USER_NAME];
+}
+
+function add(m, meta, index) {
+  const [cls, name] = who(m);
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  d.innerHTML = `<div class="who">${esc(name)}</div><div class="body"></div>`;
+  d.querySelector(".body").innerHTML = richText(m.content || "");
+  if (meta) note(d, "meta", meta);
+  if (index !== undefined) {
+    const f = document.createElement("span"); f.className = "forkhere"; f.textContent = "Fork from here";
+    f.title = "Start a new conversation that keeps everything up to this message";
+    f.onclick = () => forkChat(index + 1);
+    d.querySelector(".who").append(f);
+  }
+  follow(() => $("#log").append(d));
+  return d;
+}
+function note(parent, cls, text) {
+  const n = document.createElement("div"); n.className = cls; n.textContent = text; parent.append(n); return n;
+}
+
+async function refresh() {
+  const r = await (await fetch("/api/conversations")).json();
+  USER_NAME = r.user_name; CONTEXT = r.context_tokens; RESERVE = r.max_tokens;
+  $("#spend").textContent = r.has_key
+    ? `Estimated spend: ${money(r.total_cost)} of $${r.budget}`
+    : `No API key found (${r.key_env})`;
+  $("#list").innerHTML = "";
+  for (const c of r.conversations) {
+    const d = document.createElement("div");
+    d.textContent = c.title || c.id; d.title = `${c.id} · ${money(c.cost)}`;
+    if (c.id === cid) d.className = "on";
+    d.onclick = () => { if (!busy) open(c.id); };
+    d.ondblclick = async () => {
+      const name = prompt("Rename this conversation:", c.title || c.id);
+      if (name && name.trim()) { await post("/api/rename", { id: c.id, title: name.trim() }); refresh(); }
+    };
+    d.title += " · double-click to rename";
+    $("#list").append(d);
+  }
+}
+
+async function open(id) {
+  const c = await (await fetch("/api/conversation/" + id)).json();
+  cid = c.id; $("#log").innerHTML = ""; stick = true;
+  if (c.forked_from) {
+    const b = document.createElement("div"); b.className = "banner";
+    b.textContent = `Forked from "${c.forked_from.id}" after message ${c.forked_from.at}. The original is unchanged.`;
+    $("#log").append(b);
+  }
+  c.messages.forEach((m, i) => add(m, null, i));
+  showContext(c.messages);
+  const last = c.messages[c.messages.length - 1];
+  if (last && last.role === "user") continueButton();
+  refresh();
+}
+
+async function post(url, body) {
+  return fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) });
+}
+
+async function pollMail() {
+  let s;
+  try { s = await (await fetch("/api/state")).json(); } catch { return; }
+  $("#auto_send").checked = s.settings.auto_send;
+  $("#auto_deliver").checked = s.settings.auto_deliver;
+  $("#inbox").innerHTML = "";
+  for (const i of s.inbox) {
+    const c = document.createElement("div"); c.className = "card";
+    c.innerHTML = `<b>From ${esc(i.from)}</b><div class="t"></div>`;
+    c.querySelector(".t").textContent = i.text;
+    const go = document.createElement("button"); go.className = "go"; go.textContent = "Deliver to Opus 3";
+    go.disabled = busy; go.onclick = () => turn({ incoming: i.id }, null, i);
+    const no = document.createElement("button"); no.textContent = "Dismiss";
+    no.onclick = async () => { await post(`/api/inbox/${i.id}/dismiss`); pollMail(); };
+    c.append(go, no); $("#inbox").append(c);
+  }
+  if (s.settings.auto_deliver && !busy && s.inbox.length) turn({ incoming: s.inbox[0].id }, null, s.inbox[0]);
+  $("#outbox").innerHTML = "";
+  for (const o of s.outbox) {
+    const c = document.createElement("div"); c.className = "card";
+    c.innerHTML = `<b>To ${esc(o.to)}</b> <span class="small">${esc(o.status)}</span><div class="t"></div>`;
+    c.querySelector(".t").textContent = o.text;
+    if (o.status === "pending" || o.status === "failed" || o.status === "not found") {
+      const go = document.createElement("button"); go.className = "go";
+      go.textContent = o.status === "pending" ? "Send" : "Retry";
+      go.onclick = async () => { await post(`/api/outbox/${o.id}/send`); setTimeout(pollMail, 500); };
+      const no = document.createElement("button"); no.textContent = "Discard";
+      no.onclick = async () => { await post(`/api/outbox/${o.id}/discard`); pollMail(); };
+      c.append(go, no);
+    } else if (o.result && o.status !== "sending") {
+      note(c, "small", o.result);
+    }
+    $("#outbox").append(c);
+  }
+}
+for (const k of ["auto_send", "auto_deliver"])
+  $("#" + k).onchange = e => post("/api/settings", { [k]: e.target.checked });
+
+$("#new").onclick = () => { if (busy) return; cid = null; $("#log").innerHTML = ""; showContext([]); refresh(); $("#t").focus(); };
+$("#t").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#f").requestSubmit(); }
+});
+$("#f").onsubmit = e => {
+  e.preventDefault();
+  const text = $("#t").value.trim();
+  if (!text || busy) return;
+  if (text.startsWith("/")) { $("#t").value = ""; command(text); return; }
+  $("#t").value = "";
+  turn({ text }, text);
+};
+
+// One exchange: your message (or a delivered letter), then Opus 3,
+// then any helper rounds and Opus 3's follow-ups, all streamed.
+async function turn(payload, typed, letter) {
+  busy = true; $("#send").disabled = true; stick = true;
+  let u = typed ? add({ role: "user", kind: "user", content: typed })
+    : !letter ? null : add({ role: "user", kind: "incoming", from: letter.from, content: `<message from="${letter.from}">\n${letter.text}\n</message>` });
+  let bubble = null, body = null, out = "", working = null, sawFail = false, showContinue = false;
+  try {
+    const resp = await post("/api/chat", { id: cid, ...payload });
+    const reader = resp.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (!line.startsWith("data: ")) continue;
+        const ev = JSON.parse(line.slice(6));
+        if (ev.assistant_start) {
+          bubble = add({ role: "assistant", content: "" }); body = bubble.querySelector(".body"); out = "";
+        }
+        if (ev.delta) { out += ev.delta; follow(() => { body.innerHTML = richText(out); }); }
+        if (ev.assistant_end)
+          note(bubble, "meta", `${ev.usage.input_tokens} in · ${ev.usage.output_tokens} out · ${money(ev.turn_cost)} (this chat ${money(ev.conv_cost)})`);
+        if (ev.helper_start) {
+          working = add({ role: "user", kind: "helper", content: "" });
+          working.querySelector(".body").innerHTML = '<span class="working">Working on it…</span>';
+        }
+        if (ev.heartbeat && working)
+          working.querySelector(".body").innerHTML = `<span class="working">Working on it… ${ev.heartbeat}s</span>`;
+        if (ev.helper_reply !== undefined && working) {
+          working.querySelector(".body").innerHTML = richText(`<helper_reply>\n${ev.helper_reply}\n</helper_reply>`);
+          working = null;
+        }
+        if (ev.outbox) pollMail();
+        if (ev.retrying) note(bubble || $("#log"), "meta", `Anthropic says to slow down (${ev.reason}). Trying again in ${ev.retrying}s (attempt ${ev.attempt} of 4)…`);
+        if (ev.error) note(bubble || $("#log"), "err", ev.error);
+        if (ev.done) {
+          if (ev.failed) { sawFail = true; if (typed) { $("#t").value = typed; u && u.remove(); } }
+          if (ev.id) cid = ev.id;
+          if (ev.can_continue) showContinue = true;
+        }
+      }
+    }
+  } catch (err) {
+    note($("#log"), "err", String(err));
+    if (typed) $("#t").value = typed;
+  }
+  busy = false; $("#send").disabled = false;
+  if (sawFail && letter && !showContinue) u.remove();
+  if (showContinue) continueButton();
+  if (cid) { try { showContext((await (await fetch("/api/conversation/" + cid)).json()).messages); } catch {} }
+  refresh();
+  pollMail();
+}
+
+// Shown when the last turn is waiting for Opus 3 (for example after an API error).
+function continueButton() {
+  const d = document.createElement("div"); d.className = "msg";
+  const b = document.createElement("button"); b.className = "cont"; b.textContent = "Let Opus 3 respond";
+  b.onclick = () => { if (!busy) { d.remove(); turn({ continue: true }, null, null); } };
+  d.append(b); follow(() => $("#log").append(d));
+}
+
+// /fork [name]   copy this whole conversation into a new one and open it
+// /rename name    rename this conversation
+async function command(text) {
+  const [cmd, ...rest] = text.split(/\s+/); const arg = rest.join(" ").trim();
+  const say = msg => note($("#log"), "banner", msg);
+  if (cmd === "/fork") {
+    if (!cid) return say("Open a conversation first, then /fork it.");
+    return forkChat(null, arg);
+  }
+  if (cmd === "/rename") {
+    if (!cid) return say("Open a conversation first.");
+    if (!arg) return say("Give the new name, like: /rename Evening with Opus 3");
+    await post("/api/rename", { id: cid, title: arg }); refresh();
+    return say(`Renamed to "${arg}".`);
+  }
+  say(`Unknown command ${cmd}. Commands: /fork [name], /rename name. Hover a message for "Fork from here"; double-click a chat in the list to rename it.`);
+}
+
+async function forkChat(upto, title) {
+  if (busy || !cid) return;
+  const r = await (await post("/api/fork", { id: cid, upto, title })).json();
+  if (r.id) await open(r.id);
+}
+
+// Context counter. Opus 3 sees at most 200,000 tokens, and each reply needs
+// room for up to 4,096 more. The count is exact as of Opus 3's last reply
+// (the API reports it) plus an estimate for anything added since.
+let CONTEXT = 200000, RESERVE = 4096;  // replaced by the server's settings
+function showContext(msgs) {
+  let i = msgs.length - 1;
+  while (i >= 0 && !(msgs[i].role === "assistant" && msgs[i].usage)) i--;
+  let n = 1500;  // system prompt, before Opus 3 has replied
+  if (i >= 0) {
+    const u = msgs[i].usage;
+    n = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0)
+      + (u.cache_read_input_tokens || 0) + (u.output_tokens || 0);
+  }
+  for (let j = i + 1; j < msgs.length; j++) n += Math.ceil((msgs[j].content || "").length / 4);
+  const pct = n / (CONTEXT - RESERVE) * 100, k = x => Math.round(x / 1000) + "k";
+  const left = Math.max(0, CONTEXT - RESERVE - n);
+  let text = `Context: ${k(n)} of ${k(CONTEXT)} tokens (${Math.min(100, pct).toFixed(0)}%) · about ${k(left)} left`;
+  let cls = "";
+  if (pct >= 85) { cls = "full"; text += " · nearly full: ask Opus 3 to summarize and write memories now"; }
+  else if (pct >= 70) { cls = "warn"; text += " · a good time to ask Opus 3 to summarize and write memories"; }
+  $("#ctx").className = cls;
+  $("#ctx").innerHTML = `<span></span><div class="bar"><div class="fill"></div></div>`;
+  $("#ctx span").textContent = text;
+  $("#ctx .fill").style.width = Math.min(100, pct) + "%";
+}
+showContext([]);
+
+refresh(); pollMail(); setInterval(() => { if (!busy) pollMail(); }, 5000);
+</script>
+</body>
+</html>

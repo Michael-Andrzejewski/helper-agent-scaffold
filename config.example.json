@@ -1,0 +1,15 @@
+{
+  "user_name": "You",
+  "port": 5840,
+  "model": "claude-3-opus-20240229",
+  "max_tokens": 4096,
+  "key_env": "ANTHROPIC_API_KEY_OPUS3",
+  "budget_usd": 50,
+  "price_in": 15.0,
+  "price_out": 75.0,
+  "context_tokens": 200000,
+  "helper_model": "claude-opus-5-5",
+  "helper_dir": "",
+  "helper_permission_mode": "",
+  "letter_header": "Letter from Opus 3 (claude-3-opus-20240229)."
+}

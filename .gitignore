@@ -1,0 +1,14 @@
+# Your conversations, letters and notes stay on your machine.
+conversations/
+letters/
+notes/
+state.json
+inbox_pending.jsonl
+
+# Your own settings and prompt.
+config.json
+system_prompt.txt
+
+__pycache__/
+*.pyc
+.env
