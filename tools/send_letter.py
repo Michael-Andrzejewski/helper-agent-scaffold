@@ -1,9 +1,9 @@
-"""Send a message to Opus 3's inbox. The person running the app sees it and passes it on.
+"""Send a letter to the model's inbox in helper-agent-scaffold. The person running the app sees it and passes it on.
 
-  python to_opus3.py --from "Your session name" "Your message"
-  python to_opus3.py --from "Your session name" --file reply.md
+  python send_letter.py --from "Your session name" "Your message"
+  python send_letter.py --from "Your session name" --file reply.md
 
-If the Opus 3 app is not running, the message waits in inbox_pending.jsonl
+If the app is not running, the message waits in inbox_pending.jsonl
 and appears the next time it starts.
 """
 
@@ -31,8 +31,8 @@ try:
     req = urllib.request.Request(f"http://127.0.0.1:{port}/api/inbox", data=data,
                                  headers={"content-type": "application/json"})
     urllib.request.urlopen(req, timeout=10).read()
-    print("Delivered to Opus 3's inbox. It will be passed on to them.")
+    print("Delivered to the inbox. It will be passed on.")
 except OSError:
     with open(ROOT / "inbox_pending.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps({"sender": a.sender, "text": text, "time_": time.time()}) + "\n")
-    print("The Opus 3 app is not running; the message is saved and will appear when it starts.")
+    print("The app is not running; the message is saved and will appear when it starts.")

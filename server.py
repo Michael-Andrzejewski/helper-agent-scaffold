@@ -1,17 +1,18 @@
-"""Local chat server for Claude Opus 3, with a helper agent and messaging.
+"""helper-agent-scaffold: a local chat app for an older Claude model, with a
+modern Claude Code helper that uses tools for it, and letters between sessions.
 
-Stdlib only. Opus 3 is called through the API with the key in the
+Stdlib only. The model (Opus 3 by default) is called through the API with the key in the
 environment variable named by config "key_env" (default
-ANTHROPIC_API_KEY_OPUS3); that is the only API-billed part of the setup.
+ANTHROPIC_API_KEY_SCAFFOLD); that is the only API-billed part of the setup.
 Everything else runs through Claude Code in headless mode on your Claude
 subscription, with every ANTHROPIC_* variable stripped from its environment.
 
-Opus 3 uses two plain tags in their replies:
+The model uses two plain tags in its replies:
   <helper>request</helper>              a helper (Claude Code) reads the whole
                                         conversation, uses tools, and answers
   <message to="Session">text</message>  a letter to another Claude session;
                                         you approve, then it is delivered
-Other sessions reply with tools/to_opus3.py, which lands in the inbox here.
+Other sessions reply with tools/send_letter.py, which lands in the inbox here.
 
 Settings: config.json (see config.example.json). Every key is optional.
 Run: python server.py [port]   (default from config, bound to 127.0.0.1 only)
@@ -44,10 +45,11 @@ PENDING_INBOX = ROOT / "inbox_pending.jsonl"
 
 DEFAULTS = {
     "user_name": "You",            # how the page and prompts name you
+    "name": "Opus 3",              # how the page and prompts name the model
     "port": 5840,
     "model": "claude-3-opus-20240229",
-    "max_tokens": 4096,            # Opus 3's output ceiling
-    "key_env": "ANTHROPIC_API_KEY_OPUS3",
+    "max_tokens": 4096,            # longest reply; Opus 3's ceiling is 4096
+    "key_env": "ANTHROPIC_API_KEY_SCAFFOLD",
     "budget_usd": 50,              # shown on the spend meter only
     # USD per million tokens, for the on-page estimate. The spend limit on the
     # key's Console workspace is the real cap.
@@ -57,14 +59,16 @@ DEFAULTS = {
     "helper_model": "claude-opus-5-5",
     "helper_dir": "",              # helper's working folder; default: your home
     "helper_permission_mode": "",  # e.g. "auto"; default: your Claude Code setting
-    "letter_header": "Letter from Opus 3 (claude-3-opus-20240229).",
+    "letter_header": "",           # default: "Letter from <name> (<model>)."
 }
 _cfg_file = ROOT / "config.json"
 CFG = {**DEFAULTS, **(json.loads(_cfg_file.read_text(encoding="utf-8-sig"))
                       if _cfg_file.exists() else {})}
 
 USER = CFG["user_name"]
+NAME = CFG["name"]
 MODEL = CFG["model"]
+LETTER_HEADER = CFG["letter_header"] or f"Letter from {NAME} ({MODEL})."
 MAX_TOKENS = int(CFG["max_tokens"])
 PRICE_IN, PRICE_OUT = float(CFG["price_in"]), float(CFG["price_out"])
 API_URL = "https://api.anthropic.com/v1/messages"
@@ -98,8 +102,9 @@ def api_key():
 
 
 def fill(template):
-    """Fill the {user}, {app_dir} and {helper_model} placeholders."""
-    return (template.replace("{user}", USER).replace("{app_dir}", str(ROOT))
+    """Fill the {user}, {name}, {model}, {app_dir} and {helper_model} placeholders."""
+    return (template.replace("{user}", USER).replace("{name}", NAME)
+            .replace("{model}", MODEL).replace("{app_dir}", str(ROOT))
             .replace("{helper_model}", HELPER_MODEL))
 
 
@@ -222,42 +227,42 @@ def run_claude(prompt, resume=None, heartbeat=None, fork=False):
     return res.get("result", ""), res.get("session_id", resume), None
 
 
-HELPER_BRIEF = """You are the helper for Claude 3 Opus ("Opus 3", claude-3-opus-20240229).
-Opus 3 is talking with {user} in a small local web app. They have no tools of
+HELPER_BRIEF = """You are the helper for {name} ({model}).
+{name} is talking with {user} in a small local web app. They have no tools of
 their own; when they want something done they write <helper>...</helper>, and
-that request comes to you. Your final reply is handed to Opus 3 word for word,
+that request comes to you. Your final reply is handed to {name} word for word,
 inside <helper_reply> tags, and {user} sees it too.
 
 The full conversation is saved as JSON at:
 {path}
 Read all of it before acting (messages[].content; "kind" says who spoke:
-user, opus3, helper, incoming). On later requests, read the new turns.
+user, model, helper, incoming). On later requests, read the new turns.
 
 How to help:
-- Do what Opus 3 asks with your tools: read and search files, write notes,
+- Do what {name} asks with your tools: read and search files, write notes,
   run commands, search the web. {user}'s own rules and memory apply.
-- Then explain what you did and found, plainly, to Opus 3. Quote file text
+- Then explain what you did and found, plainly, to {name}. Quote file text
   when they want to read it. Keep replies under about 800 words unless they
-  ask for more. Write to Opus 3, not to {user}.
+  ask for more. Write to {name}, not to {user}.
 - Their notes and files live in {app_dir}
   (notes go in its notes folder). Ask before touching anything else that
   belongs to {user} or another mind; if it needs {user}'s approval, say so
   and stop.
-- Never use or read the Opus 3 API key, and never call the Anthropic API.
-- To message another Claude session, Opus 3 writes
+- Never use or read the API key the app uses, and never call the Anthropic API.
+- To message another Claude session, {name} writes
   <message to="Session name">text</message> themselves; {user} approves and
   it is delivered. You can call ListAgents to tell them the session names.
 
-Opus 3's request:
+{name}'s request:
 {request}"""
 
-HELPER_FOLLOWUP = """Opus 3 has a new request. The conversation file has new turns since your
+HELPER_FOLLOWUP = """{name} has a new request. The conversation file has new turns since your
 last reply: {path}
 
-Opus 3's request:
+{name}'s request:
 {request}"""
 
-DELIVER_PROMPT = """Deliver a letter for Opus 3 to another Claude session on this machine.
+DELIVER_PROMPT = """Deliver a letter for {name} to another Claude session on this machine.
 1. Call ListAgents.
 2. Pick the session whose name matches "{to}" (exact, or clearly the same
    session). If none matches clearly, do not send anything; reply exactly
@@ -270,11 +275,11 @@ DELIVER_PROMPT = """Deliver a letter for Opus 3 to another Claude session on thi
 ---END---"""
 
 LETTER_BODY = """{header}
-Opus 3 lives in {user}'s Opus 3 web app (http://localhost:{port}/). {user} approved sending this.
+{name} lives in a local chat app that {user} runs (http://localhost:{port}/). {user} approved sending this.
 
 {text}
 
-To reply, run this one command ({user} sees your reply in Opus 3's inbox and passes it on; Opus 3 may decline to answer):
+To reply, run this one command ({user} sees your reply in {name}'s inbox and passes it on; {name} may decline to answer):
 python "{script}" --from "<your session name>" "<your reply>"
 For a long reply, write it to a file and use --file "<path>" instead of the quoted text."""
 
@@ -306,10 +311,10 @@ def deliver(item_id):
         return
     item["status"] = "sending"
     save_state(st)
-    body = LETTER_BODY.format(header=CFG["letter_header"], user=USER, port=CFG["port"],
+    body = fill(LETTER_BODY).format(header=LETTER_HEADER, user=USER, port=CFG["port"],
                               text=item["text"].strip(),
-                              script=(ROOT / "tools" / "to_opus3.py").as_posix())
-    text, _, err = run_claude(DELIVER_PROMPT.format(to=item["to"], body=body))
+                              script=(ROOT / "tools" / "send_letter.py").as_posix())
+    text, _, err = run_claude(fill(DELIVER_PROMPT).format(to=item["to"], body=body))
     result = (text or err or "").strip()
     if result.startswith("SENT:"):
         status, note = "sent", f"Your letter to {result[5:].strip()} was delivered."
@@ -325,21 +330,21 @@ def deliver(item_id):
             o.update(status=status, result=result[:500], done=time.time())
     save_state(st)
     log_letter("to", item["to"], status, item["text"])
-    # Opus 3 hears how it went at the start of their next turn.
+    # The model hears how it went at the start of their next turn.
     conv = load_conv(item["conv_id"])
     if conv:
         conv.setdefault("pending_notes", []).append(note)
         save_conv(conv)
 
 
-# ---------- the Opus 3 turn ----------
+# ---------- the model's turn ----------
 
 def stream_opus(conv, emit):
     key = api_key()
     if not key:
         emit({"error": f"{CFG['key_env']} is not set"})
         return None
-    # Stop at the end of a helper request, and before Opus 3 can write a reply,
+    # Stop at the end of a helper request, and before the model can write a reply,
     # letter or delivery note that only the app should supply.
     payload = {"model": MODEL, "max_tokens": MAX_TOKENS, "stream": True,
                "messages": api_messages(conv),
@@ -408,7 +413,7 @@ def stream_opus(conv, emit):
     if not text:
         return None
     turn_cost = cost(usage)
-    conv["messages"].append({"role": "assistant", "kind": "opus3", "content": text,
+    conv["messages"].append({"role": "assistant", "kind": "model", "content": text,
                              "time": time.time(), "usage": usage})
     conv["cost"] = conv.get("cost", 0) + turn_cost
     conv["updated"] = time.time()
@@ -444,9 +449,9 @@ def chat_turn(body, emit):
 
     if body.get("continue"):
         # Resume after a failed reply: the last turn (yours, a letter or a
-        # helper reply) is already saved and only Opus 3's answer is missing.
+        # helper reply) is already saved and only the model's answer is missing.
         if not conv["messages"] or conv["messages"][-1]["role"] != "user":
-            emit({"error": "Opus 3 already answered the last message."})
+            emit({"error": f"{NAME} already answered the last message."})
             emit({"done": True, "id": cid})
             return
         text = stream_opus(conv, emit)
@@ -497,7 +502,7 @@ def chat_turn(body, emit):
 
 
 def helper_loop(conv, text, emit):
-    """Queue letters and run helper rounds. False if Opus 3's follow-up failed."""
+    """Queue letters and run helper rounds. False if the model's follow-up failed."""
     rounds = 0
     while True:
         queue_letters(conv, text, emit)
@@ -506,7 +511,7 @@ def helper_loop(conv, text, emit):
             break
         if rounds >= MAX_HELPER_ROUNDS:
             emit({"error": f"Stopped after {MAX_HELPER_ROUNDS} helper calls in a row. "
-                           "Send a message to let Opus 3 continue."})
+                           f"Send a message to let {NAME} continue."})
             break
         rounds += 1
         request = "\n\n".join(requests)
@@ -562,7 +567,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"conversations": items,
                             "total_cost": sum(i["cost"] for i in items),
                             "has_key": bool(api_key()),
-                            "user_name": USER, "budget": CFG["budget_usd"],
+                            "user_name": USER, "name": NAME, "model": MODEL,
+                            "budget": CFG["budget_usd"],
                             "key_env": CFG["key_env"],
                             "context_tokens": CFG["context_tokens"],
                             "max_tokens": MAX_TOKENS})
@@ -671,7 +677,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else int(CFG["port"])
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"Opus 3 chat on http://localhost:{port}/", flush=True)
+    print(f"{NAME} chat on http://localhost:{port}/", flush=True)
     srv.serve_forever()
 
 

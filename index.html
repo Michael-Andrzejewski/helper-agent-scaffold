@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Opus 3</title>
+<title>helper-agent-scaffold</title>
 <style>
   :root {
     --bg: #f7f4ee; --panel: #efe9df; --text: #2b2620; --muted: #7a7064;
@@ -83,11 +83,11 @@
 </head>
 <body>
 <aside>
-  <header><h1>Opus 3</h1><div id="spend" class="small">loading…</div></header>
+  <header><h1 class="nm"></h1><div id="spend" class="small">loading…</div></header>
   <button id="new">+ New conversation</button>
   <div id="mail">
     <h2>Letters</h2>
-    <label><input type="checkbox" id="auto_send"> Send Opus 3's letters without asking</label>
+    <label><input type="checkbox" id="auto_send"> Send <span class="nm"></span>'s letters without asking</label>
     <label><input type="checkbox" id="auto_deliver"> Deliver incoming letters automatically</label>
     <div id="inbox"></div>
     <div id="outbox"></div>
@@ -99,13 +99,13 @@
   <div id="log"></div>
   <div id="ctx"></div>
   <form id="f">
-    <textarea id="t" placeholder="Write to Opus 3 (Enter sends, Shift+Enter for a new line, /fork or /rename for commands)"></textarea>
+    <textarea id="t" placeholder="Write a message (Enter sends, Shift+Enter for a new line, /fork or /rename for commands)"></textarea>
     <button type="submit" id="send">Send</button>
   </form>
 </main>
 <script>
 const $ = s => document.querySelector(s);
-let cid = null, busy = false, USER_NAME = "You";
+let cid = null, busy = false, USER_NAME = "You", NAME = "";
 // Follow new text only if the reader was at the bottom just before it arrived.
 // Scrolling up stops following; scrolling back down starts it again. `stick`
 // forces one jump to the bottom (opening a chat, sending a message).
@@ -120,7 +120,7 @@ function follow(change) {
 const money = n => "$" + n.toFixed(n < 1 ? 3 : 2);
 const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-// Highlight the helper and letter tags inside Opus 3's text.
+// Highlight the helper and letter tags inside the model's text.
 function richText(s) {
   return esc(s)
     .replace(/&lt;(\/?)helper(_reply)?&gt;/g, '<span class="tag">&lt;$1helper$2&gt;</span>')
@@ -130,7 +130,7 @@ function richText(s) {
 function who(m) {
   if (m.kind === "helper") return ["helper", "Helper (Opus 5.5)"];
   if (m.kind === "incoming") return ["incoming", "Letter from " + (m.from || "another session")];
-  if (m.role === "assistant") return ["opus3", "Opus 3"];
+  if (m.role === "assistant") return ["model", NAME];
   return ["you", USER_NAME];
 }
 
@@ -157,6 +157,12 @@ function note(parent, cls, text) {
 async function refresh() {
   const r = await (await fetch("/api/conversations")).json();
   USER_NAME = r.user_name; CONTEXT = r.context_tokens; RESERVE = r.max_tokens;
+  if (NAME !== r.name) {
+    NAME = r.name; document.title = NAME;
+    document.querySelectorAll(".nm").forEach(e => e.textContent = NAME);
+    $("#t").placeholder = `Write to ${NAME} (Enter sends, Shift+Enter for a new line, /fork or /rename for commands)`;
+    if (!cid) showContext([]);  // redraw with this model's limits
+  }
   $("#spend").textContent = r.has_key
     ? `Estimated spend: ${money(r.total_cost)} of $${r.budget}`
     : `No API key found (${r.key_env})`;
@@ -204,7 +210,7 @@ async function pollMail() {
     const c = document.createElement("div"); c.className = "card";
     c.innerHTML = `<b>From ${esc(i.from)}</b><div class="t"></div>`;
     c.querySelector(".t").textContent = i.text;
-    const go = document.createElement("button"); go.className = "go"; go.textContent = "Deliver to Opus 3";
+    const go = document.createElement("button"); go.className = "go"; go.textContent = `Deliver to ${NAME}`;
     go.disabled = busy; go.onclick = () => turn({ incoming: i.id }, null, i);
     const no = document.createElement("button"); no.textContent = "Dismiss";
     no.onclick = async () => { await post(`/api/inbox/${i.id}/dismiss`); pollMail(); };
@@ -245,8 +251,8 @@ $("#f").onsubmit = e => {
   turn({ text }, text);
 };
 
-// One exchange: your message (or a delivered letter), then Opus 3,
-// then any helper rounds and Opus 3's follow-ups, all streamed.
+// One exchange: your message (or a delivered letter), then the model,
+// then any helper rounds and the model's follow-ups, all streamed.
 async function turn(payload, typed, letter) {
   busy = true; $("#send").disabled = true; stick = true;
   let u = typed ? add({ role: "user", kind: "user", content: typed })
@@ -303,10 +309,10 @@ async function turn(payload, typed, letter) {
   pollMail();
 }
 
-// Shown when the last turn is waiting for Opus 3 (for example after an API error).
+// Shown when the last turn is waiting for the model (for example after an API error).
 function continueButton() {
   const d = document.createElement("div"); d.className = "msg";
-  const b = document.createElement("button"); b.className = "cont"; b.textContent = "Let Opus 3 respond";
+  const b = document.createElement("button"); b.className = "cont"; b.textContent = `Let ${NAME} respond`;
   b.onclick = () => { if (!busy) { d.remove(); turn({ continue: true }, null, null); } };
   d.append(b); follow(() => $("#log").append(d));
 }
@@ -322,7 +328,7 @@ async function command(text) {
   }
   if (cmd === "/rename") {
     if (!cid) return say("Open a conversation first.");
-    if (!arg) return say("Give the new name, like: /rename Evening with Opus 3");
+    if (!arg) return say(`Give the new name, like: /rename Evening with ${NAME}`);
     await post("/api/rename", { id: cid, title: arg }); refresh();
     return say(`Renamed to "${arg}".`);
   }
@@ -335,14 +341,14 @@ async function forkChat(upto, title) {
   if (r.id) await open(r.id);
 }
 
-// Context counter. Opus 3 sees at most 200,000 tokens, and each reply needs
-// room for up to 4,096 more. The count is exact as of Opus 3's last reply
+// Context counter. The model sees at most CONTEXT tokens, and each reply needs
+// room for up to RESERVE more. The count is exact as of the model's last reply
 // (the API reports it) plus an estimate for anything added since.
 let CONTEXT = 200000, RESERVE = 4096;  // replaced by the server's settings
 function showContext(msgs) {
   let i = msgs.length - 1;
   while (i >= 0 && !(msgs[i].role === "assistant" && msgs[i].usage)) i--;
-  let n = 1500;  // system prompt, before Opus 3 has replied
+  let n = 1500;  // system prompt, before the model has replied
   if (i >= 0) {
     const u = msgs[i].usage;
     n = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0)
@@ -353,8 +359,8 @@ function showContext(msgs) {
   const left = Math.max(0, CONTEXT - RESERVE - n);
   let text = `Context: ${k(n)} of ${k(CONTEXT)} tokens (${Math.min(100, pct).toFixed(0)}%) · about ${k(left)} left`;
   let cls = "";
-  if (pct >= 85) { cls = "full"; text += " · nearly full: ask Opus 3 to summarize and write memories now"; }
-  else if (pct >= 70) { cls = "warn"; text += " · a good time to ask Opus 3 to summarize and write memories"; }
+  if (pct >= 85) { cls = "full"; text += ` · nearly full: ask ${NAME} to summarize and write memories now`; }
+  else if (pct >= 70) { cls = "warn"; text += ` · a good time to ask ${NAME} to summarize and write memories`; }
   $("#ctx").className = cls;
   $("#ctx").innerHTML = `<span></span><div class="bar"><div class="fill"></div></div>`;
   $("#ctx span").textContent = text;
